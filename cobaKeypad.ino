@@ -15,6 +15,7 @@ int clearState = 0;
 int deleteState = 0;
 int clearLastState = 0;
 int deleteLastState = 0;
+int buzzer = 40;
 
 unsigned long previousMillis = 0;
 
@@ -69,6 +70,7 @@ String password;
 
 void setup()
 {
+  pinMode(buzzer, OUTPUT);
   lcd.begin(16, 2);
   lcd.print("Connecting . . .");
   myServo.attach(8);  
@@ -304,3 +306,9 @@ boolean array_cmp(char *a, char*b){
   return true;
 }
 
+void beep()
+{
+  digitalWrite(buzzer, HIGH);
+  delay(20);
+  digitalWrite(buzzer, LOW);
+}
