@@ -213,6 +213,9 @@ if (keypressed != NO_KEY)
     lcdPrint();
     Serial.print(String(key[0]) + String(key[1]) + String(key[2]) + String(key[3]) + String(key[4]) + String(key[5]) + "\n");
     if(array_cmp(key, pass) == true){
+      tone(buzzer,100,200);
+      delay(200);
+      tone(buzzer,600);
       Serial.print("Password sesuai\n");
       myServo.write(180);
       randomPass();
@@ -231,6 +234,10 @@ if (keypressed != NO_KEY)
                 }
       salah = 0;
     } else {
+      tone(buzzer,500,200);
+      delay(300);
+      tone(buzzer,500,200);
+      delay(300);
       Serial.print("Password tidak sesuai\n");
       salah++;
       if (salah == 3) {
@@ -268,6 +275,7 @@ void lcdPrint(){
     key[cursorx] = keypressed;
     lcd.setCursor(cursorx, 1);
     lcd.print(keypressed);
+    beep();
   }
   
 void lcdReset(){
@@ -311,4 +319,5 @@ void beep()
   digitalWrite(buzzer, HIGH);
   delay(20);
   digitalWrite(buzzer, LOW);
+//tone(buzzer,800,200);
 }
