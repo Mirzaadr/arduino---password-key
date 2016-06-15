@@ -7,32 +7,6 @@
 
 const byte numRows= 4; //number of rows on the keypad
 const byte numCols= 4; //number of columns on the keypad
-int cursorx = 0;
-char keypressed;
-int clearPin = 50;
-int deletePin = 52;
-int clearState = 0;
-int deleteState = 0;
-int clearLastState = 0;
-int deleteLastState = 0;
-int buzzer = 40;
-
-unsigned long previousMillis = 0;
-
-const long intervalRefresh = 1000 * 60 * 5;
-const long intervalPassword = 1000 * 60 * 60;
-
-boolean conn = false;
-
-int addressUlang = 0;
-int addressPass = 1;
-int randomVal = 1;
-int salah = 0;
-
-char key[6];
-
-Servo myServo;
-
 
 //keymap defines the key pressed according to the row and columns just as appears on the keypad
 char keymap[numRows][numCols]= 
@@ -51,7 +25,7 @@ char keys[]=
 const byte keyLength = sizeof(keys)/sizeof(keys[0]);
 const int passLen = 6;
 char pass[passLen+1];
-
+String password;
 
 //Code that shows the the keypad connections to the arduino terminals
 byte rowPins[numRows] = {22, 24, 26, 28}; //Rows 0 to 3
@@ -63,19 +37,53 @@ IPAddress ip(192, 168, 0, 177);
 
 //initializes an instance of the Keypad class
 Keypad myKeypad= Keypad(makeKeymap(keymap), rowPins, colPins, numRows, numCols);
-LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+LiquidCrystal lcd(21, 20, 19, 18, 17, 16);
 
 EthernetClient client;
-String password;
 
-void setup()
-{
+String readstring;
+const int readstringLen = 7;
+char buff[readstringLen];
+int buffLen = 0;
+int cursorx = 0;
+char keypressed;
+int clearPin = 50;
+int deletePin = A15;
+int clearState = 0;
+int deleteState = 0;
+int clearLastState = 0;
+int deleteLastState = 0;
+int buzzer = 40;
+boolean sendData = false;
+
+const int pintuPin = 7;
+int pintuState = 0;
+int pintuLastState = 0;
+boolean pintuTerbuka = false;
+
+unsigned long previousMillis = 0;
+
+const long intervalRefresh = 1000 * 60 * 5;
+const long intervalPassword = 1000 * 60 * 60;
+
+boolean conn = false;
+
+int addressUlang = 0;
+int addressPass = 1;
+int randomVal = 1;
+int salah = 0;
+
+char key[6];
+
+Servo myServo;
+
+void setup() {
   pinMode(buzzer, OUTPUT);
+  pinMode(pintuPin, INPUT_PULLUP);
   lcd.begin(16, 2);
   lcd.print("Connecting . . .");
   myServo.attach(8);  
   Serial.begin(9600);
-  // Print a message to the LCD.
 
   randomVal = EEPROM.read(addressUlang);
   Serial.println("val = " + String(randomVal));
@@ -90,64 +98,22 @@ void setup()
     Serial.print(String(pass[i]));
     password +=  pass[i];
   }
-
   Serial.println();
-
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-  }
-
-  // start the Ethernet connection:
-  if (Ethernet.begin(mac) == 0) {
-    Serial.println("Failed to configure Ethernet using DHCP");
-    // try to congifure using IP address instead of DHCP:
-    Ethernet.begin(mac, ip);
-  }
-  else {
-    delay(1000);
-    Serial.println("connected");
-    lcd.clear();
-    lcd.print("Masukkan pass :");
-    conn = true;
-    client.connect(server, 80);
-    client.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=arduino&pass=" + password);
-    Serial.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=arduino&pass=" + password);
-    client.println();
-    client.stop();
-  }
-    
+  firstConnecting();
 }
 
-void loop()
-{
-  
-  if(!conn) {
+void loop() {
 
-  if (Ethernet.begin(mac) == 0) {
-    Serial.println("Failed to configure Ethernet using DHCP");
-    // try to congifure using IP address instead of DHCP:
-    lcd.clear();
-    lcd.print("Connecting . . .");
-    conn = false;
-    Ethernet.begin(mac, ip);
+  if(!conn) {
+    connecting();
   }
   else {
-    delay(1000);
-    lcd.clear();
-    lcd.print("Masukkan pass :");
-    Serial.println("connected");
-    conn = true;
-  }
     
-    
-  }
-  
-  else{
-    
-    unsigned long currentMillis = millis();
+    if(!pintuTerbuka){
+
+  unsigned long currentMillis = millis();
 
   if (currentMillis - previousMillis >= intervalRefresh) {
-    // save the last time you blinked the LED
     previousMillis = currentMillis;
     client.connect(server, 80);
     client.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=haha&pass=865622029775033");
@@ -156,46 +122,47 @@ void loop()
   }
   
   if (currentMillis - previousMillis >= intervalPassword) {
-    // save the last time you blinked the LED
     previousMillis = currentMillis;
     randomPass();
     EEPROM.write(addressUlang, randomVal);
-    client.connect(server, 80);
-    client.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=arduino&pass=" + password);
-    Serial.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=arduino&pass=" + password);
-    client.println();
-    client.stop();
+    sendingData(password);
   }
                   
   
 keypressed = myKeypad.getKey();
 
 int clearReading = digitalRead(clearPin);
-int deleteReading = digitalRead(deletePin);
+
 if(clearReading != clearState && clearReading != clearLastState) {
 
   clearState = clearReading;
   clearState = digitalRead(clearPin);
 
   if (clearState == HIGH) {
+        beep();
         lcdReset();
+        
   }
 
  clearState = 0;
   
 }
 
-if(deleteReading != deleteState && deleteReading != deleteLastState && cursorx != 0) {
+int deleteReading = digitalRead(deletePin);
+    if(deleteReading != deleteState || deleteReading != deleteLastState) {
 
-  deleteState = deleteReading;
-  deleteState = digitalRead(deletePin);
+      deleteState = deleteReading;
+      deleteState = digitalRead(deletePin);
 
-  if (deleteState == HIGH) {
-     cursorx--;
-     key[cursorx] = keypressed;
-     lcd.setCursor(cursorx, 1);
-     lcd.print(' ');
-  }
+      if (deleteReading == LOW) {
+        beep();
+        myServo.write(180);
+        lcd.clear();
+        lcd.print("Pintu terbuka");
+        pintuTerbuka = true;
+        salah = 0;
+
+      }
   
   deleteState = 0;
 }
@@ -214,24 +181,16 @@ if (keypressed != NO_KEY)
     Serial.print(String(key[0]) + String(key[1]) + String(key[2]) + String(key[3]) + String(key[4]) + String(key[5]) + "\n");
     if(array_cmp(key, pass) == true){
       tone(buzzer,100,200);
-      delay(200);
-      tone(buzzer,600);
+      delay(100);
+      tone(buzzer,600,800);
       Serial.print("Password sesuai\n");
       myServo.write(180);
       randomPass();
       EEPROM.write(addressUlang, randomVal);
-              if (client.connect(server, 80)) {
-                  Serial.println("connected");
-                  // Make a HTTP request:
-                  client.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=arduino&pass=" + password);
-                  Serial.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=arduino&pass=" + password);
-                  client.println();
-                  client.stop();
-                } else {
-                  // if you didn't get a connection to the server:
-                  Serial.println("connection failed");
-                  conn = false;
-                }
+      sendingData(password);  
+      lcd.clear();
+      lcd.print("Pintu terbuka");
+      pintuTerbuka = true;
       salah = 0;
     } else {
       tone(buzzer,500,200);
@@ -244,31 +203,139 @@ if (keypressed != NO_KEY)
         myServo.write(90);
         randomPass();
         EEPROM.write(addressUlang, randomVal);
-        if (client.connect(server, 80)) {
-              Serial.println("connected");
-              // Make a HTTP request:
-              client.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=arduino&pass=" + password);
-              Serial.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=arduino&pass=" + password);
-              client.println();
-              client.stop();
-            } else {
-              // if you didn't get a connection to the server:
-              Serial.println("connection failed");
-              conn = false;
-            }
+        sendingData(password);
         salah = 0;  
       }
-      
+     delay(1000);
+     lcdReset();
     }
-    delay(1000);
-    lcdReset();
+
+  }
+  
+}
+
+  clearLastState = clearReading;
+  deleteLastState = deleteReading;
+  
+    }
+    else{
+
+      int pintuReading = digitalRead(pintuPin);
+      //Serial.println(pintuReading);
+
+      if(pintuReading == 0){
+           myServo.write(90);
+           pintuTerbuka = false;
+           lcdReset();
+      } 
+    }
   }
 }
 
-  clearLastState = clearReading;  
-  deleteLastState = deleteReading;
+void firstConnecting(){
 
-}  
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
+
+  if (Ethernet.begin(mac) == 0) {
+    Serial.println("Failed to configure Ethernet using DHCP");
+    // try to congifure using IP address instead of DHCP:
+    Ethernet.begin(mac, ip);
+  }
+  else {
+    delay(1000);
+    Serial.println("connected");
+    lcd.clear();
+    lcd.print("Masukkan pass :");
+    conn = true;
+
+    while(!sendData){
+      
+    if (client.connect(server, 80)) {
+      client.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=arduino&pass=" + password);
+      Serial.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=arduino&pass=" + password);
+      client.println();
+    }
+    while(client.connected()){
+      if(client.available()){
+          char c = client.read();
+          Serial.print(c);
+          buff[buffLen] = c;
+          buffLen++;
+      }
+    }
+
+    for (int i = 0; i < readstringLen; i++){
+      readstring +=  buff[i];
+    }
+    //Serial.print(readstring);
+    if(readstring = "success")
+    {
+      sendData = true;
+    }
+    else {
+      sendData = false;
+    }
+    buffLen = 0;
+    client.stop();
+    } 
+    }
+}
+
+void connecting(){
+  if (Ethernet.begin(mac) == 0) {
+    Serial.println("Failed to configure Ethernet using DHCP");
+    // try to congifure using IP address instead of DHCP:
+    lcd.clear();
+    lcd.print("Connecting . . .");
+    conn = false;
+    Ethernet.begin(mac, ip);
+  }
+  else {
+    delay(1000);
+    lcd.clear();
+    lcd.print("Masukkan pass :");
+    Serial.println("connected");
+    conn = true;
+  }
+}
+
+void sendingData(String passs){
+if (client.connect(server, 80)) {
+  Serial.println("connected");
+  // Make a HTTP request:
+  client.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=arduino&pass=" + passs);
+  Serial.println("GET http://patpatstudio.com/mikro/keamanan.php?kode=arduino&pass=" + passs);
+  client.println();
+  Serial.println("Kirim data");
+} else {
+  // if you didn't get a connection to the server:
+  Serial.println("connection failed");
+  conn = false;
+}
+   while(client.connected()){
+      if(client.available()){
+          char c = client.read();
+          Serial.print(c);
+          buff[buffLen] = c;
+          buffLen++;
+      }
+    }
+
+    for (int i = 0; i < readstringLen; i++){
+    readstring +=  buff[i];
+    }
+    //Serial.print(readstring);
+    if(readstring = "success")
+    {
+      sendData = true;
+    }
+    else {
+      sendData = false;
+    }
+    buffLen = 0;
+    client.stop();
 }
 
 void lcdPrint(){
@@ -290,9 +357,7 @@ void lcdReset(){
   }
 
 void randomPass(){
-  
   password = "";
-
   for (int n=0; n < passLen; n++){
     pass[n] = keys[random(0, keyLength)];
   }
@@ -319,5 +384,4 @@ void beep()
   digitalWrite(buzzer, HIGH);
   delay(20);
   digitalWrite(buzzer, LOW);
-//tone(buzzer,800,200);
 }
